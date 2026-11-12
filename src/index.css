@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0033B8;
+  --color-primary-light: #0A7BFF;
+  --color-primary-dark: #002080;
+  --color-secondary: #0A7BFF;
+  --color-accent-green: #10B981;
+  --color-accent-red: #EF4444;
+  --color-accent-yellow: #F59E0B;
+  --color-accent-orange: #F97316;
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F1F5F9;
+  --color-text: #0F172A;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-border: #E2E8F0;
+  --color-border-light: #F1F5F9;
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+/* Base */
+* { -webkit-tap-highlight-color: transparent; }
+html { font-family: var(--font-sans); }
+body {
+  @apply bg-bg text-text antialiased;
+  margin: 0;
+}
+
+/* Phone Chassis for Desktop Mockup */
+.phone-frame {
+  @apply bg-slate-950 rounded-[44px] p-2.5 shadow-2xl relative select-none shrink-0;
+  width: 390px;
+  height: 800px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-frame-inner {
+  @apply bg-bg rounded-[36px] overflow-hidden h-full w-full relative flex flex-col;
+}
+
+/* Hardware button accents on phone frame */
+.phone-frame::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: 140px;
+  width: 3px;
+  height: 55px;
+  background: #334155;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+
+/* Status chip colors */
+.chip-draft { @apply bg-gray-100 text-gray-600; }
+.chip-reverified { @apply bg-blue-100 text-blue-700; }
+.chip-funded { @apply bg-yellow-100 text-yellow-700; }
+.chip-shipped { @apply bg-orange-100 text-orange-700; }
+.chip-delivered { @apply bg-purple-100 text-purple-700; }
+.chip-released { @apply bg-green-100 text-green-700; }
+.chip-disputed { @apply bg-red-100 text-red-700; }
+
+/* Clean, High-Fidelity Legal PDF Printing Overrides */
+@media print {
+  /* Force exact colors for navy blue headers, borders, and fills */
+  *, html, body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    background: #ffffff !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 5mm 6mm;
+  }
+
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Hide the simulator, phone frames, and interactive UI */
+  #root {
+    display: none !important;
+  }
+
+  /* Show the official high-fidelity dispute document in full print resolution */
+  #print-official-doc {
+    display: block !important;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* Offscreen container for pixel-perfect PDF canvas generation without mobile squishing */
+.offscreen-print-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 794px; /* Standard A4 width at 96 DPI */
+  background: #ffffff;
+  z-index: -9999;
+}
