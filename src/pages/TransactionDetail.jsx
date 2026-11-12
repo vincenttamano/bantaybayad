@@ -10,6 +10,7 @@ import {
 import { Button, Card, StatusChip, LoadingSpinner } from '../components/UI';
 import ProgressStepper from '../components/ProgressStepper';
 import ShareDealModal from '../components/ShareDealModal';
+import PaymentModal from '../components/PaymentModal';
 import useStore from '../store/useStore';
 import { useActiveRole } from '../context/RoleContext';
 import { COURIER_STATUSES, DISPUTE_REASONS } from '../data/seedData';
@@ -46,6 +47,7 @@ export default function TransactionDetail() {
 
   const [localRoleOverride, setLocalRoleOverride] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDispute, setShowDispute] = useState(false);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [disputeForm, setDisputeForm] = useState({ reason: '', description: '', evidence: null });
@@ -345,7 +347,7 @@ export default function TransactionDetail() {
                 variant="primary"
                 size="md"
                 className="w-full text-xs font-bold"
-                onClick={() => navigate(`/deposit/${id}`)}
+                onClick={() => setShowPaymentModal(true)}
               >
                 <Lock className="w-4 h-4" />
                 Proceed to Deposit {formatCurrency(totalAmount)}
@@ -737,6 +739,17 @@ export default function TransactionDetail() {
 
       {/* Share Deal Modal */}
       <ShareDealModal isOpen={showShareModal} onClose={() => setShowShareModal(false)} txn={txn} />
+
+      {/* Full-Screen Payment Popup covering the entire screen */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        txn={txn}
+        onPaymentSuccess={() => {
+          setShowPaymentModal(false);
+          addToast('Funds successfully vaulted in escrow!', 'success');
+        }}
+      />
     </div>
   );
 }

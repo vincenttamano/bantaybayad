@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/patch-html2canvas.cjs && vite",
+    "prebuild": "node scripts/patch-html2canvas.cjs",
+    "postinstall": "node scripts/patch-html2canvas.cjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

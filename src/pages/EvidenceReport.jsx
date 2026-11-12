@@ -370,6 +370,18 @@ export default function EvidenceReport() {
         logging: false,
         backgroundColor: '#ffffff',
         width: 794,
+        windowWidth: 794,
+        onclone: (clonedDoc) => {
+          const printEl = clonedDoc.getElementById('print-official-doc');
+          if (printEl) {
+            printEl.style.display = 'block';
+            printEl.style.visibility = 'visible';
+            printEl.style.position = 'static';
+            printEl.style.left = '0';
+            printEl.style.top = '0';
+            printEl.style.width = '794px';
+          }
+        }
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
