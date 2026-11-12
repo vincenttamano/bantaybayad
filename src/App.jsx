@@ -109,7 +109,14 @@ function PresentationBar({ deviceMode, setDeviceMode }) {
 // Dual Screen View Component (renders two synchronized phones side-by-side)
 function DualScreenView({ deviceMode, setDeviceMode }) {
   const transactions = useStore((s) => s.transactions);
-  const [dualTxnId, setDualTxnId] = useState(transactions[1]?.id || transactions[0]?.id || 'txn-002');
+  
+  // Detect if a specific deal is in the URL hash
+  const hashMatch = typeof window !== 'undefined' ? window.location.hash.match(/\/transaction\/([a-zA-Z0-9_-]+)/) : null;
+  const initialTxnId = (hashMatch && transactions.some((t) => t.id === hashMatch[1]))
+    ? hashMatch[1]
+    : (transactions[1]?.id || transactions[0]?.id || 'txn-002');
+
+  const [dualTxnId, setDualTxnId] = useState(initialTxnId);
   const [syncKey, setSyncKey] = useState(0);
 
   const selectedTxn = transactions.find((t) => t.id === dualTxnId) || transactions[0];
@@ -212,18 +219,30 @@ function DualScreenView({ deviceMode, setDeviceMode }) {
 }
 
 export default function App() {
-  const [deviceMode, setDeviceMode] = useState('dual'); // Default to 'dual' for clearest dual-device experience
+  // Check if opened via deep link (e.g. #/transaction/..., #/verify, #/deposit) or on mobile viewport
+  const isDirectRoute = typeof window !== 'undefined' &&
+    window.location.hash &&
+    window.location.hash !== '#/' &&
+    window.location.hash !== '';
+  const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 768;
 
-  // If dual screen presentation is selected, mount the DualScreenView with separate MemoryRouters
-  if (deviceMode === 'dual') {
+  // If opening a shared deal or on a mobile phone, render the real single-app experience!
+  // On desktop home, default to 'dual' for presenter dual-screen simulation
+  const [deviceMode, setDeviceMode] = useState(() => {
+    if (isDirectRoute || isMobileViewport) return 'device';
+    return 'dual';
+  });
+
+  // If dual screen simulator is selected on desktop AND not opening a direct deep route
+  if (deviceMode === 'dual' && !isDirectRoute && !isMobileViewport) {
     return <DualScreenView deviceMode={deviceMode} setDeviceMode={setDeviceMode} />;
   }
 
-  // Standard Single Phone and Responsive view using BrowserRouter
+  // Standard Native Router View (runs the real route for this device)
   return (
     <Router>
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-start sm:py-4 selection:bg-primary/20">
-        <PresentationBar deviceMode={deviceMode} setDeviceMode={setDeviceMode} />
+        {!isMobileViewport && <PresentationBar deviceMode={deviceMode} setDeviceMode={setDeviceMode} />}
 
         {/* Main Application Container */}
         {deviceMode === 'phone' ? (
@@ -231,6 +250,10 @@ export default function App() {
             <div className="phone-frame-inner">
               <AppLayout />
             </div>
+          </div>
+        ) : deviceMode === 'device' ? (
+          <div className="w-full max-w-md h-[100dvh] sm:h-[820px] bg-bg sm:rounded-3xl sm:shadow-2xl overflow-hidden sm:my-auto sm:border sm:border-slate-800 flex flex-col">
+            <AppLayout />
           </div>
         ) : (
           <div className="w-full max-w-md h-[800px] bg-bg sm:rounded-3xl sm:shadow-2xl overflow-hidden my-auto border border-slate-800 flex flex-col">

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2, Copy, Check, ExternalLink, QrCode,
-  Smartphone, Users, X, ArrowRight
+  Smartphone, Users, X, ArrowRight, CloudUpload, CheckCircle2
 } from 'lucide-react';
 import { Button } from './UI';
-import { generateShareableLink } from '../services/syncService';
+import { generateShareableLink, pushToCloudStore } from '../services/syncService';
 
 export default function ShareDealModal({ isOpen, onClose, txn }) {
   if (!isOpen || !txn) return null;
@@ -15,27 +15,31 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
   const [activeTab, setActiveTab] = useState(txn.role === 'buyer' ? 'seller' : 'buyer');
   const [copiedRole, setCopiedRole] = useState(null);
   const [showQr, setShowQr] = useState(false);
+  const [cloudPushed, setCloudPushed] = useState(false);
+  const [cloudPushing, setCloudPushing] = useState(false);
 
+  // Push deal to cloud bus the moment modal opens so QR scan on fresh device works
+  useEffect(() => {
+    if (!txn) return;
+    setCloudPushing(true);
+    setCloudPushed(false);
+    pushToCloudStore(txn)
+      .then(() => {
+        setCloudPushed(true);
+        setCloudPushing(false);
+      })
+      .catch(() => {
+        setCloudPushing(false);
+      });
+  }, [txn?.id, txn?.status]);
+
+  // Links with compact data payload embedded (keeps QR scannable for most deals)
   const buyerLink = generateShareableLink(txn.id, 'buyer', txn, 'full');
   const sellerLink = generateShareableLink(txn.id, 'seller', txn, 'full');
   const activeLink = activeTab === 'buyer' ? buyerLink : sellerLink;
 
-  // Short links for QR codes — no data= payload so QR is scannable on any phone
-  const buyerQrLink = generateShareableLink(txn.id, 'buyer', null, 'short');
-  const sellerQrLink = generateShareableLink(txn.id, 'seller', null, 'short');
-  const activeQrLink = activeTab === 'buyer' ? buyerQrLink : sellerQrLink;
-
-  const handleCopy = (link, role) => {
-    navigator.clipboard.writeText(link);
-    setCopiedRole(role);
-    setTimeout(() => setCopiedRole(null), 2500);
-  };
-
-  const handleOpenWindow = (link) => {
-    window.open(link, '_blank');
-  };
-
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(activeQrLink)}`;
+  // QR uses the full link (compact payload included) — it's now within QR scanner range
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(activeLink)}`;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm overflow-y-auto">

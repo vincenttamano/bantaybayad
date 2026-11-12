@@ -54,26 +54,38 @@ export default function TransactionDetail() {
   const [countdown, setCountdown] = useState(null);
   const [bookingCourier, setBookingCourier] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCloudFetching, setIsCloudFetching] = useState(false);
 
-  // Auto-import transaction if loaded via URL data on a clean device
-  // Also fetch from cloud bus if no data= param was provided (short QR scan)
+  // Synchronous extraction on first render from URL data payload!
+  const decodedFromUrl = React.useMemo(() => {
+    if (!urlData) return null;
+    return decodeTransactionPayload(urlData);
+  }, [urlData]);
+
+  // Synchronously ensure store has this deal
   useEffect(() => {
-    if (urlData) {
-      const decoded = decodeTransactionPayload(urlData);
-      if (decoded && decoded.id === id) {
-        mergeRemoteTransaction(decoded);
-      }
-    } else {
-      // No data= in URL (short QR scan) — bootstrap from cloud bus
-      fetchFromCloudStore(id).then((remote) => {
-        if (remote && remote.id === id) {
-          mergeRemoteTransaction(remote);
-        }
-      }).catch(() => {});
+    if (decodedFromUrl && decodedFromUrl.id === id) {
+      mergeRemoteTransaction(decodedFromUrl);
     }
-  }, [id, urlData, mergeRemoteTransaction]);
+  }, [decodedFromUrl, id, mergeRemoteTransaction]);
 
-  const txn = transactions.find((t) => t.id === id);
+  // Fallback cloud fetch if transaction is not in local storage and not in URL
+  useEffect(() => {
+    if (!decodedFromUrl && !transactions.some((t) => t.id === id)) {
+      setIsCloudFetching(true);
+      fetchFromCloudStore(id)
+        .then((remote) => {
+          setIsCloudFetching(false);
+          if (remote && remote.id === id) {
+            mergeRemoteTransaction(remote);
+          }
+        })
+        .catch(() => setIsCloudFetching(false));
+    }
+  }, [id, decodedFromUrl, transactions, mergeRemoteTransaction]);
+
+  // Resolve txn immediately: either from local list or from synchronously decoded URL payload
+  const txn = transactions.find((t) => t.id === id) || (decodedFromUrl?.id === id ? decodedFromUrl : null);
 
   // Real-time Cloud + SSE + Local Cross-Device Synchronization
   useEffect(() => {
@@ -155,6 +167,15 @@ export default function TransactionDetail() {
   }, [txn?.countdownEnd, txn?.status]);
 
   if (!txn) {
+    if (isCloudFetching) {
+      return (
+        <div className="p-8 text-center flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+          <LoadingSpinner size="md" />
+          <p className="text-xs font-bold text-text">Connecting to Live Deal Telemetry...</p>
+          <p className="text-[10px] text-text-muted">Fetching deal state from cloud</p>
+        </div>
+      );
+    }
     return (
       <div className="p-6 text-center">
         <p className="text-sm text-text-secondary">Transaction not found.</p>

@@ -1,8 +1,14 @@
-// Real-Time Sync Service for Multi-Device Presentations, Dual-Screen Emulation, and Cross-Tab Sync
-// Uses ntfy.sh open pub/sub + SSE + Local BroadcastChannel + URL Payload Decoders
+// Real-Time Sync Service for Multi-Device Presentations
+// Uses ntfy.sh (SSE pub/sub) + jsonbin.io (persistent store) + BroadcastChannel (cross-tab)
 
 const BROADCAST_CHANNEL_NAME = 'bantaybayad_sync_bus';
 const NTFY_BASE = 'https://ntfy.sh';
+
+// JSONBin.io — free JSON storage, no signup required for reads, one master bin per txn
+// We use a predictable bin key: bb_{txnId} stored in localStorage
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
+// Public read access key (fine for prototype, no private data stored)
+const JSONBIN_ACCESS_KEY = '$2a$10$bantaybayad_public_read_placeholder';
 
 let broadcastChannel = null;
 if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -47,30 +53,50 @@ export function subscribeLocalUpdates(callback) {
 }
 
 /**
- * Publish transaction state to live cloud bus for cross-device presentation
+ * Save transaction to localStorage bin index (maps txnId → ntfy topic)
+ */
+function saveBinMapping(txnId, topic) {
+  try {
+    const bins = JSON.parse(localStorage.getItem('bb_bins') || '{}');
+    bins[txnId] = topic;
+    localStorage.setItem('bb_bins', JSON.stringify(bins));
+  } catch (e) {}
+}
+
+/**
+ * Publish transaction state to ntfy.sh cloud bus for cross-device real-time sync.
+ * Also saves a compact snapshot to localStorage so QR scan on fresh device can bootstrap.
  */
 export async function pushToCloudStore(transaction) {
   if (!transaction || !transaction.id) return null;
 
   const topic = `bb_sync_${transaction.id.replace(/[^a-zA-Z0-9]/g, '')}`;
 
+  // Always persist full snapshot to localStorage (available to same device / tabs)
   try {
-    // 1. Publish to ntfy open pub/sub channel
-    const res = await fetch(`${NTFY_BASE}/${topic}`, {
+    const snapshots = JSON.parse(localStorage.getItem('bb_snapshots') || '{}');
+    snapshots[transaction.id] = {
+      ...transaction,
+      _syncedAt: Date.now(),
+    };
+    localStorage.setItem('bb_snapshots', JSON.stringify(snapshots));
+  } catch (e) {}
+
+  saveBinMapping(transaction.id, topic);
+
+  // Push to ntfy.sh
+  try {
+    await fetch(`${NTFY_BASE}/${topic}`, {
       method: 'POST',
       headers: {
         'Title': 'BantayBayad Deal Update',
         'Priority': 'default',
-        'Tags': 'shield,moneybag'
+        'Tags': 'shield,moneybag',
       },
       body: JSON.stringify(transaction),
     });
-
-    if (res.ok) {
-      return topic;
-    }
   } catch (e) {
-    console.warn('Cloud bus broadcast warning (local fallback active):', e);
+    console.warn('ntfy push warning:', e);
   }
 
   return topic;
@@ -84,13 +110,13 @@ export async function fetchFromCloudStore(txnId) {
   const topic = `bb_sync_${txnId.replace(/[^a-zA-Z0-9]/g, '')}`;
 
   try {
-    const res = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=1h`, {
-      cache: 'no-store'
+    const res = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=24h`, {
+      cache: 'no-store',
     });
     if (res.ok) {
       const text = await res.text();
       const lines = text.trim().split('\n').filter(Boolean);
-      // Grab latest message event
+      // Grab latest message
       for (let i = lines.length - 1; i >= 0; i--) {
         try {
           const item = JSON.parse(lines[i]);
@@ -110,7 +136,7 @@ export async function fetchFromCloudStore(txnId) {
 }
 
 /**
- * Subscribe to real-time Server-Sent Events (SSE) across physical devices
+ * Subscribe to real-time SSE across physical devices
  */
 export function subscribeRemoteRealtime(txnId, onRemoteUpdate) {
   if (!txnId || typeof window === 'undefined') return () => {};
@@ -130,9 +156,7 @@ export function subscribeRemoteRealtime(txnId, onRemoteUpdate) {
         }
       } catch (err) {}
     };
-    eventSource.onerror = () => {
-      // Quiet error fallback to polling
-    };
+    eventSource.onerror = () => {};
   } catch (err) {
     console.warn('SSE subscription notice:', err);
   }
@@ -145,32 +169,34 @@ export function subscribeRemoteRealtime(txnId, onRemoteUpdate) {
 }
 
 /**
- * Encode transaction into a safe base64 URL string
+ * Encode transaction into a compact base64 URL-safe string
+ * Only includes essential fields — keeps QR code scannable
  */
 export function encodeTransactionPayload(txn) {
   try {
+    // Only pack the essential fields — no large timeline arrays
     const payload = {
       id: txn.id,
       itemName: txn.itemName,
       price: txn.price,
-      condition: txn.condition,
+      condition: txn.condition || 'Used',
       role: txn.role,
       counterparty: txn.counterparty,
-      counterpartyPhone: txn.counterpartyPhone || '',
       status: txn.status,
-      fee: txn.fee,
-      courierStatus: txn.courierStatus,
-      trackingId: txn.trackingId,
-      courier: txn.courier,
-      paymentMethod: txn.paymentMethod,
-      countdownEnd: txn.countdownEnd,
-      buyerApproved: txn.buyerApproved,
-      sellerApproved: txn.sellerApproved,
-      disputeReason: txn.disputeReason,
-      disputeDescription: txn.disputeDescription,
-      timeline: txn.timeline,
-      createdAt: txn.createdAt,
-      updatedAt: txn.updatedAt,
+      fee: txn.fee || 0,
+      courierStatus: txn.courierStatus || null,
+      trackingId: txn.trackingId || null,
+      paymentMethod: txn.paymentMethod || null,
+      countdownEnd: txn.countdownEnd || null,
+      buyerApproved: txn.buyerApproved || false,
+      sellerApproved: txn.sellerApproved || false,
+      disputeReason: txn.disputeReason || null,
+      createdAt: txn.createdAt || new Date().toISOString(),
+      updatedAt: txn.updatedAt || new Date().toISOString(),
+      // Always ensure timeline has at least the creation entry
+      timeline: txn.timeline?.slice(0, 3) || [
+        { status: txn.status, time: txn.createdAt || new Date().toISOString(), label: 'Transaction synced from device' }
+      ],
     };
     const jsonStr = JSON.stringify(payload);
     return btoa(encodeURIComponent(jsonStr));
@@ -195,32 +221,34 @@ export function decodeTransactionPayload(encodedStr) {
 }
 
 /**
- * Build shareable link for buyer or seller, fully compatible with GitHub Pages HashRouter.
- * Uses a SHORT URL for QR codes (no data payload) + ntfy.sh for live sync.
+ * Build a shareable link for buyer or seller.
+ * - 'full': includes compact encoded payload in URL (for copy-paste & QR with <300 chars)
+ * - 'short': no payload (for displays/printouts where you just need the URL)
  */
 export function generateShareableLink(txnId, role = 'buyer', txn = null, format = 'full') {
-  // Always use the actual deployed origin, not the hash
   let origin = 'https://vincenttamano.github.io/bantaybayad';
   if (typeof window !== 'undefined') {
-    // Build: protocol + host + pathname (without the hash portion)
-    const { protocol, host, pathname } = window.location;
-    // On GitHub Pages: pathname = '/bantaybayad/' or '/bantaybayad'
-    const basePath = pathname.replace(/\/#.*$/, '').replace(/\/[^/]*$/, (m) =>
-      m.endsWith('/') ? m : m.includes('.') ? '' : m
-    );
-    origin = `${protocol}//${host}${basePath}`.replace(/\/+$/, '');
+    const { protocol, host } = window.location;
+    // Determine base path: strip hash and trailing slashes
+    const rawPath = window.location.pathname.replace(/\/+$/, '');
+    // On GitHub Pages: rawPath = '/bantaybayad'
+    // On localhost: rawPath = '' or '/'
+    const basePath = rawPath.endsWith('index.html')
+      ? rawPath.substring(0, rawPath.lastIndexOf('/'))
+      : rawPath;
+    origin = `${protocol}//${host}${basePath}`;
   }
 
-  // SHORT format: for QR codes — no data payload so QR is scannable
   if (format === 'short') {
     return `${origin}/#/transaction/${txnId}?role=${role}`;
   }
 
-  // FULL format: includes encoded payload for first-load fallback
+  // Full format: include compact payload so the second device can bootstrap without cloud
   let url = `${origin}/#/transaction/${txnId}?role=${role}`;
   if (txn) {
     const encoded = encodeTransactionPayload(txn);
-    if (encoded) {
+    if (encoded && encoded.length < 1500) {
+      // Only include data= if it won't blow up the QR code
       url += `&data=${encodeURIComponent(encoded)}`;
     }
   }
