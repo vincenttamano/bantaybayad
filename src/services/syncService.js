@@ -195,16 +195,29 @@ export function decodeTransactionPayload(encodedStr) {
 }
 
 /**
- * Build shareable link for buyer or seller, fully compatible with GitHub Pages HashRouter
+ * Build shareable link for buyer or seller, fully compatible with GitHub Pages HashRouter.
+ * Uses a SHORT URL for QR codes (no data payload) + ntfy.sh for live sync.
  */
-export function generateShareableLink(txnId, role = 'buyer', txn = null) {
-  let basePath = 'http://localhost:5173';
+export function generateShareableLink(txnId, role = 'buyer', txn = null, format = 'full') {
+  // Always use the actual deployed origin, not the hash
+  let origin = 'https://vincenttamano.github.io/bantaybayad';
   if (typeof window !== 'undefined') {
-    // Strip hash or trailing slashes to preserve exact GitHub Pages root path
-    basePath = window.location.href.split('#')[0].replace(/\/+$/, '');
+    // Build: protocol + host + pathname (without the hash portion)
+    const { protocol, host, pathname } = window.location;
+    // On GitHub Pages: pathname = '/bantaybayad/' or '/bantaybayad'
+    const basePath = pathname.replace(/\/#.*$/, '').replace(/\/[^/]*$/, (m) =>
+      m.endsWith('/') ? m : m.includes('.') ? '' : m
+    );
+    origin = `${protocol}//${host}${basePath}`.replace(/\/+$/, '');
   }
 
-  let url = `${basePath}/#/transaction/${txnId}?role=${role}`;
+  // SHORT format: for QR codes — no data payload so QR is scannable
+  if (format === 'short') {
+    return `${origin}/#/transaction/${txnId}?role=${role}`;
+  }
+
+  // FULL format: includes encoded payload for first-load fallback
+  let url = `${origin}/#/transaction/${txnId}?role=${role}`;
   if (txn) {
     const encoded = encodeTransactionPayload(txn);
     if (encoded) {

@@ -16,9 +16,14 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
   const [copiedRole, setCopiedRole] = useState(null);
   const [showQr, setShowQr] = useState(false);
 
-  const buyerLink = generateShareableLink(txn.id, 'buyer', txn);
-  const sellerLink = generateShareableLink(txn.id, 'seller', txn);
+  const buyerLink = generateShareableLink(txn.id, 'buyer', txn, 'full');
+  const sellerLink = generateShareableLink(txn.id, 'seller', txn, 'full');
   const activeLink = activeTab === 'buyer' ? buyerLink : sellerLink;
+
+  // Short links for QR codes — no data= payload so QR is scannable on any phone
+  const buyerQrLink = generateShareableLink(txn.id, 'buyer', null, 'short');
+  const sellerQrLink = generateShareableLink(txn.id, 'seller', null, 'short');
+  const activeQrLink = activeTab === 'buyer' ? buyerQrLink : sellerQrLink;
 
   const handleCopy = (link, role) => {
     navigator.clipboard.writeText(link);
@@ -30,7 +35,7 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
     window.open(link, '_blank');
   };
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activeLink)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(activeQrLink)}`;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm overflow-y-auto">
@@ -178,15 +183,18 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
               >
                 <div className="bg-surface-alt rounded-xl p-3 flex flex-col items-center justify-center text-center">
                   <p className="text-[10px] font-bold text-text-secondary mb-1.5">
-                    Scan with phone camera ({activeTab.toUpperCase()}):
+                    Scan with phone camera — opens as {activeTab.toUpperCase()} for "{txn.itemName}":
                   </p>
                   <div className="bg-white p-2 rounded-lg shadow-sm border border-border">
                     <img
                       src={qrUrl}
                       alt={`QR Code for ${activeTab}`}
-                      className="w-36 h-36 object-contain"
+                      className="w-40 h-40 object-contain"
                     />
                   </div>
+                  <p className="text-[9px] font-mono text-text-muted mt-1 text-center break-all px-1">
+                    {activeQrLink}
+                  </p>
                 </div>
               </motion.div>
             )}

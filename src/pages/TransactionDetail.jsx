@@ -56,12 +56,20 @@ export default function TransactionDetail() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Auto-import transaction if loaded via URL data on a clean device
+  // Also fetch from cloud bus if no data= param was provided (short QR scan)
   useEffect(() => {
     if (urlData) {
       const decoded = decodeTransactionPayload(urlData);
       if (decoded && decoded.id === id) {
         mergeRemoteTransaction(decoded);
       }
+    } else {
+      // No data= in URL (short QR scan) — bootstrap from cloud bus
+      fetchFromCloudStore(id).then((remote) => {
+        if (remote && remote.id === id) {
+          mergeRemoteTransaction(remote);
+        }
+      }).catch(() => {});
     }
   }, [id, urlData, mergeRemoteTransaction]);
 

@@ -314,3 +314,4 @@ export default function PaymentModal({ isOpen, onClose, txn, onPaymentSuccess })
     </div>
   );
 }
+
