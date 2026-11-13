@@ -1,14 +1,9 @@
 // Real-Time Sync Service for Multi-Device Presentations
-// Uses ntfy.sh (SSE pub/sub) + jsonbin.io (persistent store) + BroadcastChannel (cross-tab)
+// Uses ntfy.sh (Open Public SSE pub/sub — Zero signup / Zero API keys needed)
+// + URL Data Payload (Instant Zero-DB bootstrap) + BroadcastChannel (cross-tab)
 
 const BROADCAST_CHANNEL_NAME = 'bantaybayad_sync_bus';
 const NTFY_BASE = 'https://ntfy.sh';
-
-// JSONBin.io — free JSON storage, no signup required for reads, one master bin per txn
-// We use a predictable bin key: bb_{txnId} stored in localStorage
-const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
-// Public read access key (fine for prototype, no private data stored)
-const JSONBIN_ACCESS_KEY = '$2a$10$bantaybayad_public_read_placeholder';
 
 let broadcastChannel = null;
 if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
