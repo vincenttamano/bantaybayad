@@ -5,6 +5,7 @@ import {
   Share2, Copy, Check, ExternalLink, QrCode,
   Smartphone, Users, X, ArrowRight, CloudUpload, CheckCircle2
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Button } from './UI';
 import { generateShareableLink, pushToCloudStore } from '../services/syncService';
 
@@ -15,6 +16,7 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
   const [activeTab, setActiveTab] = useState(txn.role === 'buyer' ? 'seller' : 'buyer');
   const [copiedRole, setCopiedRole] = useState(null);
   const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [cloudPushed, setCloudPushed] = useState(false);
   const [cloudPushing, setCloudPushing] = useState(false);
 
@@ -33,13 +35,35 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
       });
   }, [txn?.id, txn?.status]);
 
-  // Links with compact data payload embedded (keeps QR scannable for most deals)
+  // Links with compact data payload embedded (guarantees immediate zero-DB load)
   const buyerLink = generateShareableLink(txn.id, 'buyer', txn, 'full');
   const sellerLink = generateShareableLink(txn.id, 'seller', txn, 'full');
   const activeLink = activeTab === 'buyer' ? buyerLink : sellerLink;
 
-  // QR uses the full link (compact payload included) — it's now within QR scanner range
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(activeLink)}`;
+  // Generate QR code locally as a clean data URL (works 100% offline, zero network error)
+  useEffect(() => {
+    if (!activeLink) return;
+    QRCode.toDataURL(activeLink, {
+      width: 250,
+      margin: 1,
+      color: {
+        dark: '#002d72',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => setQrDataUrl(url))
+      .catch((err) => console.error('Failed to generate QR data URL:', err));
+  }, [activeLink]);
+
+  const handleCopy = (link, role) => {
+    navigator.clipboard.writeText(link);
+    setCopiedRole(role);
+    setTimeout(() => setCopiedRole(null), 2500);
+  };
+
+  const handleOpenWindow = (link) => {
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm overflow-y-auto">
@@ -78,10 +102,12 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
           <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              <span className="font-bold text-emerald-800 text-[11px]">Live Sync Active</span>
+              <span className="font-bold text-emerald-800 text-[11px]">
+                {cloudPushing ? 'Broadcasting Deal...' : cloudPushed ? 'Cloud Sync Ready' : 'Live Sync Active'}
+              </span>
             </div>
             <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
-              P2P + Cloud
+              Realtime P2P
             </span>
           </div>
 
@@ -119,9 +145,9 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
             </div>
             <p className="text-[10px] text-text-secondary">
               {activeTab === 'seller' ? (
-                <><strong>For Seller:</strong> Open to accept the transaction and dispatch via courier when escrow is funded.</>
+                <><strong>For Seller:</strong> Open on Phone 2 to accept deal and dispatch package via courier.</>
               ) : (
-                <><strong>For Buyer:</strong> Open to deposit funds into secure escrow vault and confirm upon delivery.</>
+                <><strong>For Buyer:</strong> Open on Phone 1 to deposit into escrow and confirm delivery satisfaction.</>
               )}
             </p>
           </div>
@@ -187,17 +213,23 @@ export default function ShareDealModal({ isOpen, onClose, txn }) {
               >
                 <div className="bg-surface-alt rounded-xl p-3 flex flex-col items-center justify-center text-center">
                   <p className="text-[10px] font-bold text-text-secondary mb-1.5">
-                    Scan with phone camera — opens as {activeTab.toUpperCase()} for "{txn.itemName}":
+                    Scan with phone camera — opens as {activeTab.toUpperCase()}:
                   </p>
-                  <div className="bg-white p-2 rounded-lg shadow-sm border border-border">
-                    <img
-                      src={qrUrl}
-                      alt={`QR Code for ${activeTab}`}
-                      className="w-40 h-40 object-contain"
-                    />
+                  <div className="bg-white p-2 rounded-xl shadow-sm border border-border">
+                    {qrDataUrl ? (
+                      <img
+                        src={qrDataUrl}
+                        alt={`QR Code for ${activeTab}`}
+                        className="w-44 h-44 object-contain mx-auto"
+                      />
+                    ) : (
+                      <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                        Generating QR Code...
+                      </div>
+                    )}
                   </div>
-                  <p className="text-[9px] font-mono text-text-muted mt-1 text-center break-all px-1">
-                    {activeQrLink}
+                  <p className="text-[9px] font-mono text-text-muted mt-2 text-center break-all px-1 max-w-xs line-clamp-2">
+                    {activeLink}
                   </p>
                 </div>
               </motion.div>

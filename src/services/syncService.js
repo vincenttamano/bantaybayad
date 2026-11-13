@@ -217,33 +217,30 @@ export function decodeTransactionPayload(encodedStr) {
 
 /**
  * Build a shareable link for buyer or seller.
- * - 'full': includes compact encoded payload in URL (for copy-paste & QR with <300 chars)
- * - 'short': no payload (for displays/printouts where you just need the URL)
+ * Always ensures exact trailing slash for GitHub Pages directories so 301 redirects never drop the #/ hash!
  */
 export function generateShareableLink(txnId, role = 'buyer', txn = null, format = 'full') {
-  let origin = 'https://vincenttamano.github.io/bantaybayad';
+  let origin = 'https://vincenttamano.github.io/bantaybayad/';
   if (typeof window !== 'undefined') {
     const { protocol, host } = window.location;
-    // Determine base path: strip hash and trailing slashes
-    const rawPath = window.location.pathname.replace(/\/+$/, '');
-    // On GitHub Pages: rawPath = '/bantaybayad'
-    // On localhost: rawPath = '' or '/'
-    const basePath = rawPath.endsWith('index.html')
-      ? rawPath.substring(0, rawPath.lastIndexOf('/'))
-      : rawPath;
-    origin = `${protocol}//${host}${basePath}`;
+    let path = window.location.pathname;
+    if (path.endsWith('index.html')) {
+      path = path.substring(0, path.lastIndexOf('/') + 1);
+    }
+    if (!path.endsWith('/')) {
+      path = path + '/';
+    }
+    origin = `${protocol}//${host}${path}`;
   }
 
-  if (format === 'short') {
-    return `${origin}/#/transaction/${txnId}?role=${role}`;
+  if (!origin.endsWith('/')) {
+    origin += '/';
   }
 
-  // Full format: include compact payload so the second device can bootstrap without cloud
-  let url = `${origin}/#/transaction/${txnId}?role=${role}`;
-  if (txn) {
+  let url = `${origin}#/transaction/${txnId}?role=${role}`;
+  if (txn && format === 'full') {
     const encoded = encodeTransactionPayload(txn);
-    if (encoded && encoded.length < 1500) {
-      // Only include data= if it won't blow up the QR code
+    if (encoded) {
       url += `&data=${encodeURIComponent(encoded)}`;
     }
   }
